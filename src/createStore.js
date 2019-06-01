@@ -29,23 +29,20 @@ import combineReducers from './combineReducers'
  * @returns {Store} A Redux store that lets you read the state, dispatch actions
  * and subscribe to changes.
  */
-export default function createStore(reducer, preloadedState, enhancer, selectors) {
+export default function createStore(reducers, selectors, actions, preloadedState, enhancer) {
+
   if (
     (typeof preloadedState === 'function' && typeof enhancer === 'function') ||
-    (typeof enhancer === 'function' && typeof arguments[3] === 'function')
+    (typeof enhancer === 'function' && typeof arguments[6] === 'function')
   ) {
     throw new Error(
       'It looks like you are passing several store enhancers to ' +
-        'createStore(). This is not supported. Instead, compose them ' +
-        'together to a single function.'
+      'createStore(). This is not supported. Instead, compose them ' +
+      'together to a single function.'
     )
   }
 
-
-
-  // console.log('combinedReducers', combinedReducers())
-  const wrappedReducer = (reducer)=>(state, action) => {
-    console.log('wrapped reducer', state,selectors)
+  const wrapReducer = (reducer) => (state, action) => {
     const nextState = reducer(state, action)
 
     Object.keys(selectors).map(key => {
@@ -59,11 +56,7 @@ export default function createStore(reducer, preloadedState, enhancer, selectors
     return nextState
   }
 
-  Object.keys(reducer).forEach((reducerKey)=>{
-    reducer[reducerKey] = wrappedReducer(reducer[reducerKey])
-  })
-
-  const combinedReducers = combineReducers(reducer)
+  const reducer = typeof reducers === 'function' ? reducers : wrapReducer(combineReducers(reducers))
 
 
   if (typeof preloadedState === 'function' && typeof enhancer === 'undefined') {
@@ -76,15 +69,18 @@ export default function createStore(reducer, preloadedState, enhancer, selectors
       throw new Error('Expected the enhancer to be a function.')
     }
 
-    return enhancer(createStore)(reducer, preloadedState)
+    const enhanced = enhancer(createStore)(reducer, selectors, actions, preloadedState)
+
+    enhanced.getState.actions = actions
+    return enhanced
   }
 
-  if (typeof combinedReducers !== 'function') {
+  if (typeof reducer !== 'function') {
     throw new Error('Expected the reducer to be a function.')
   }
 
 
-  let currentReducer = combinedReducers
+  let currentReducer = reducer
   let currentState = preloadedState
   let currentListeners = []
   let nextListeners = currentListeners
@@ -108,15 +104,14 @@ export default function createStore(reducer, preloadedState, enhancer, selectors
    *
    * @returns {any} The current state tree of your application.
    */
-  function getState() {
+  const getState = () => {
     if (isDispatching) {
       throw new Error(
         'You may not call store.getState() while the reducer is executing. ' +
-          'The reducer has already received the state as an argument. ' +
-          'Pass it down from the top reducer instead of reading it from the store.'
+        'The reducer has already received the state as an argument. ' +
+        'Pass it down from the top reducer instead of reading it from the store.'
       )
     }
-
     return currentState
   }
 
@@ -153,9 +148,9 @@ export default function createStore(reducer, preloadedState, enhancer, selectors
     if (isDispatching) {
       throw new Error(
         'You may not call store.subscribe() while the reducer is executing. ' +
-          'If you would like to be notified after the store has been updated, subscribe from a ' +
-          'component and invoke store.getState() in the callback to access the latest state. ' +
-          'See https://redux.js.org/api-reference/store#subscribe(listener) for more details.'
+        'If you would like to be notified after the store has been updated, subscribe from a ' +
+        'component and invoke store.getState() in the callback to access the latest state. ' +
+        'See https://redux.js.org/api-reference/store#subscribe(listener) for more details.'
       )
     }
 
@@ -172,7 +167,7 @@ export default function createStore(reducer, preloadedState, enhancer, selectors
       if (isDispatching) {
         throw new Error(
           'You may not unsubscribe from a store listener while the reducer is executing. ' +
-            'See https://redux.js.org/api-reference/store#subscribe(listener) for more details.'
+          'See https://redux.js.org/api-reference/store#subscribe(listener) for more details.'
         )
       }
 
@@ -213,14 +208,14 @@ export default function createStore(reducer, preloadedState, enhancer, selectors
     if (!isPlainObject(action)) {
       throw new Error(
         'Actions must be plain objects. ' +
-          'Use custom middleware for async actions.'
+        'Use custom middleware for async actions.'
       )
     }
 
     if (typeof action.type === 'undefined') {
       throw new Error(
         'Actions may not have an undefined "type" property. ' +
-          'Have you misspelled a constant?'
+        'Have you misspelled a constant?'
       )
     }
 
@@ -265,7 +260,7 @@ export default function createStore(reducer, preloadedState, enhancer, selectors
     // Any reducers that existed in both the new and old rootReducer
     // will receive the previous state. This effectively populates
     // the new state tree with any relevant data from the old one.
-    dispatch({ type: ActionTypes.REPLACE })
+    dispatch({type: ActionTypes.REPLACE})
   }
 
   /**
@@ -298,7 +293,7 @@ export default function createStore(reducer, preloadedState, enhancer, selectors
 
         observeState()
         const unsubscribe = outerSubscribe(observeState)
-        return { unsubscribe }
+        return {unsubscribe}
       },
 
       [$$observable]() {
@@ -310,13 +305,14 @@ export default function createStore(reducer, preloadedState, enhancer, selectors
   // When a store is created, an "INIT" action is dispatched so that every
   // reducer returns their initial state. This effectively populates
   // the initial state tree.
-  dispatch({ type: ActionTypes.INIT })
+  dispatch({type: ActionTypes.INIT})
 
   return {
     dispatch,
     subscribe,
     getState,
     replaceReducer,
+    actions,
     [$$observable]: observable
   }
 }
