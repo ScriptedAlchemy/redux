@@ -120,6 +120,8 @@ export default function createStore(reducer, preloadedState, enhancer, selectors
     return currentState
   }
 
+  getState.actions = actions
+
   /**
    * Adds a change listener. It will be called any time an action is dispatched,
    * and some part of the state tree may potentially have changed. You may then
