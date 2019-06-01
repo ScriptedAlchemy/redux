@@ -29,10 +29,16 @@ import combineReducers from './combineReducers'
  * @returns {Store} A Redux store that lets you read the state, dispatch actions
  * and subscribe to changes.
  */
-export default function createStore(reducer, preloadedState, enhancer, selectors) {
+export default function createStore(
+  reducers,
+  selectors,
+  actions,
+  preloadedState,
+  enhancer
+) {
   if (
     (typeof preloadedState === 'function' && typeof enhancer === 'function') ||
-    (typeof enhancer === 'function' && typeof arguments[3] === 'function')
+    (typeof enhancer === 'function' && typeof arguments[6] === 'function')
   ) {
     throw new Error(
       'It looks like you are passing several store enhancers to ' +
@@ -41,30 +47,25 @@ export default function createStore(reducer, preloadedState, enhancer, selectors
     )
   }
 
-
-
-  // console.log('combinedReducers', combinedReducers())
-  const wrappedReducer = (reducer)=>(state, action) => {
-    console.log('wrapped reducer', state,selectors)
+  const wrapReducer = reducer => (state, action) => {
     const nextState = reducer(state, action)
 
     Object.keys(selectors).map(key => {
       const func = selectors[key]
 
-      nextState[key] = func.length === 1
-        ? func(nextState)
-        : (...args) => func(nextState, ...args)
+      nextState[key] =
+        func.length === 1
+          ? func(nextState)
+          : (...args) => func(nextState, ...args)
     })
 
     return nextState
   }
 
-  Object.keys(reducer).forEach((reducerKey)=>{
-    reducer[reducerKey] = wrappedReducer(reducer[reducerKey])
-  })
-
-  const combinedReducers = combineReducers(reducer)
-
+  const reducer =
+    typeof reducers === 'function'
+      ? reducers
+      : wrapReducer(combineReducers(reducers))
 
   if (typeof preloadedState === 'function' && typeof enhancer === 'undefined') {
     enhancer = preloadedState
@@ -76,15 +77,22 @@ export default function createStore(reducer, preloadedState, enhancer, selectors
       throw new Error('Expected the enhancer to be a function.')
     }
 
-    return enhancer(createStore)(reducer, preloadedState)
+    const enhanced = enhancer(createStore)(
+      reducer,
+      selectors,
+      actions,
+      preloadedState
+    )
+
+    enhanced.getState.actions = actions
+    return enhanced
   }
 
-  if (typeof combinedReducers !== 'function') {
+  if (typeof reducer !== 'function') {
     throw new Error('Expected the reducer to be a function.')
   }
 
-
-  let currentReducer = combinedReducers
+  let currentReducer = reducer
   let currentState = preloadedState
   let currentListeners = []
   let nextListeners = currentListeners
@@ -108,7 +116,7 @@ export default function createStore(reducer, preloadedState, enhancer, selectors
    *
    * @returns {any} The current state tree of your application.
    */
-  function getState() {
+  const getState = () => {
     if (isDispatching) {
       throw new Error(
         'You may not call store.getState() while the reducer is executing. ' +
@@ -116,7 +124,6 @@ export default function createStore(reducer, preloadedState, enhancer, selectors
           'Pass it down from the top reducer instead of reading it from the store.'
       )
     }
-
     return currentState
   }
 
@@ -317,6 +324,7 @@ export default function createStore(reducer, preloadedState, enhancer, selectors
     subscribe,
     getState,
     replaceReducer,
+    actions,
     [$$observable]: observable
   }
 }
