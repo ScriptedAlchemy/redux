@@ -2,6 +2,7 @@ import $$observable from 'symbol-observable'
 
 import ActionTypes from './utils/actionTypes'
 import isPlainObject from './utils/isPlainObject'
+import combineReducers from './combineReducers'
 
 /**
  * Creates a Redux store that holds the state tree.
@@ -28,7 +29,7 @@ import isPlainObject from './utils/isPlainObject'
  * @returns {Store} A Redux store that lets you read the state, dispatch actions
  * and subscribe to changes.
  */
-export default function createStore(reducer, preloadedState, enhancer) {
+export default function createStore(reducer, preloadedState, enhancer, selectors) {
   if (
     (typeof preloadedState === 'function' && typeof enhancer === 'function') ||
     (typeof enhancer === 'function' && typeof arguments[3] === 'function')
@@ -39,6 +40,31 @@ export default function createStore(reducer, preloadedState, enhancer) {
         'together to a single function.'
     )
   }
+
+
+
+  // console.log('combinedReducers', combinedReducers())
+  const wrappedReducer = (reducer)=>(state, action) => {
+    console.log('wrapped reducer', state,selectors)
+    const nextState = reducer(state, action)
+
+    Object.keys(selectors).map(key => {
+      const func = selectors[key]
+
+      nextState[key] = func.length === 1
+        ? func(nextState)
+        : (...args) => func(nextState, ...args)
+    })
+
+    return nextState
+  }
+
+  Object.keys(reducer).forEach((reducerKey)=>{
+    reducer[reducerKey] = wrappedReducer(reducer[reducerKey])
+  })
+
+  const combinedReducers = combineReducers(reducer)
+
 
   if (typeof preloadedState === 'function' && typeof enhancer === 'undefined') {
     enhancer = preloadedState
@@ -53,11 +79,12 @@ export default function createStore(reducer, preloadedState, enhancer) {
     return enhancer(createStore)(reducer, preloadedState)
   }
 
-  if (typeof reducer !== 'function') {
+  if (typeof combinedReducers !== 'function') {
     throw new Error('Expected the reducer to be a function.')
   }
 
-  let currentReducer = reducer
+
+  let currentReducer = combinedReducers
   let currentState = preloadedState
   let currentListeners = []
   let nextListeners = currentListeners
